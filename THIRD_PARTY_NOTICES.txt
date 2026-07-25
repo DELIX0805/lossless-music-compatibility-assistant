@@ -1,0 +1,8 @@
+轻音转换使用 FFmpeg 作为内置音频处理引擎。
+
+FFmpeg: https://ffmpeg.org/
+Source code: https://git.ffmpeg.org/ffmpeg.git
+License: GNU General Public License version 3 or later（当前内置构建启用了 GPL 组件）
+
+本程序通过独立进程调用 FFmpeg。发布或再分发本 EXE 前，请一并遵守 FFmpeg
+及其构建所包含组件的许可证义务，并保留本说明。

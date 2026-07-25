@@ -1,0 +1,7 @@
+bin/
+obj/
+Engine/ffmpeg.exe
+*.png
+design-qa.md
+publish/
+

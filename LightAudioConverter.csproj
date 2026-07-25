@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>LosslessMusicCompatibilityAssistant</AssemblyName>
+    <RootNamespace>LightAudioConverter</RootNamespace>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Engine\ffmpeg.exe" LogicalName="LightAudioConverter.Engine.ffmpeg.exe" />
+    <EmbeddedResource Include="THIRD_PARTY_NOTICES.txt" LogicalName="LightAudioConverter.THIRD_PARTY_NOTICES.txt" />
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+</Project>
