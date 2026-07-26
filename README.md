@@ -1,5 +1,42 @@
 # 无损音乐兼容助手 / Lossless Music Compatibility Assistant
 
+## 开发初衷 / Why This Project
+
+许多老款音乐播放器（例如部分索尼 NW 系列）虽然能够播放 FLAC、ALAC 等无损
+格式，却对高采样率、高位深或多声道文件支持有限。同一批音乐可能在电脑和新
+设备上正常播放，复制到老播放器后却出现无法识别、无法播放或播放异常的问题。
+
+无损音乐兼容助手正是为解决这一问题而开发：它把规格不统一的音乐转换成对应
+设备更容易稳定解码的格式，同时尽可能保留原始音质。已经符合目标规格的文件
+会直接复制，不做重新编码；必须降低采样率、位深或声道数时，则使用高精度
+SoXR 重采样和必要的 TPDF 抖动，尽量减少转换造成的可闻损失。软件不会进行
+音量归一化、动态压缩或 EQ，也不会把有损音频转换成“真正的无损音频”。
+
+这里的“无损兼容”主要是指使用 FLAC 或 ALAC 等无损编码格式，并避免不必要的
+重复编码。若源文件本身超过播放器能力，降采样、降低位深或多声道转双声道在
+数学意义上并非完全无损，但这是实现老设备兼容播放所必需的处理。
+
+Many older music players—including selected Sony NW models—can decode lossless
+formats such as FLAC or ALAC, but have limited support for high sample rates,
+high bit depths, or multichannel audio. Files that play normally on computers
+and newer devices may therefore be rejected or play incorrectly on these
+players.
+
+Lossless Music Compatibility Assistant was created to solve that problem. It
+converts inconsistent source files into formats that legacy devices can decode
+reliably while preserving as much of the original quality as possible. Files
+that already match the selected target are copied without re-encoding. When
+sample-rate, bit-depth, or channel conversion is unavoidable, the application
+uses high-precision SoXR resampling and TPDF dithering where appropriate. It
+does not apply loudness normalization, dynamic compression, or EQ, and it does
+not claim that converting lossy audio can restore lost information.
+
+In this project, “lossless compatibility” primarily means using lossless codecs
+such as FLAC or ALAC and avoiding unnecessary re-encoding. When a source exceeds
+the player's capabilities, resampling, bit-depth reduction, or stereo downmixing
+is not mathematically lossless, but may be necessary for reliable playback on
+legacy hardware.
+
 ![无损音乐兼容助手主界面](docs/screenshots/main-window.png)
 
 一款面向索尼 NW 系列播放器与 iPod shuffle 4 的 Windows 音频转换工具。
