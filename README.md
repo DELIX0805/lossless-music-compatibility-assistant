@@ -1,5 +1,7 @@
 # 无损音乐兼容助手 / Lossless Music Compatibility Assistant
 
+![无损音乐兼容助手主界面](docs/screenshots/main-window.png)
+
 一款面向索尼 NW 系列播放器与 iPod shuffle 4 的 Windows 音频转换工具。
 它提供三个设备兼容预设：
 

@@ -2,6 +2,7 @@ bin/
 obj/
 Engine/ffmpeg.exe
 *.png
+!docs/screenshots/*.png
 design-qa.md
 publish/
 artifacts/
