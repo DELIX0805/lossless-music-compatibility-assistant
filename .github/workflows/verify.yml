@@ -1,0 +1,31 @@
+name: Verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install FFmpeg
+        shell: powershell
+        run: choco install ffmpeg-full -y --no-progress
+
+      - name: Prepare embedded engine
+        shell: powershell
+        run: .\scripts\prepare-engine.ps1
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build and run regression tests
+        shell: powershell
+        run: .\scripts\run-tests.ps1

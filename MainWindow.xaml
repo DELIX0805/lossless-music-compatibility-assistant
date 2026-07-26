@@ -5,7 +5,8 @@
         Width="760" Height="540" MinWidth="700" MinHeight="520"
         WindowStartupLocation="CenterScreen" WindowStyle="None"
         AllowsTransparency="False" Background="{StaticResource Bg}"
-        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver">
+        AllowDrop="True" Drop="Window_Drop" DragOver="Window_DragOver"
+        Closing="Window_Closing">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="0"/>
     </WindowChrome.WindowChrome>
@@ -178,7 +179,8 @@
                             </StackPanel>
                             <TextBlock x:Name="OutputFolderText" Grid.Column="1" Foreground="#B4C0C8" TextTrimming="CharacterEllipsis"
                                        VerticalAlignment="Center"/>
-                            <Button Grid.Column="2" Content="浏览" Padding="18,7" Click="BrowseOutput_Click"/>
+                            <Button x:Name="BrowseOutputButton" Grid.Column="2" Content="浏览"
+                                    Padding="18,7" Click="BrowseOutput_Click"/>
                         </Grid>
                     </Border>
                     <Grid Grid.Row="2" Margin="18,0">

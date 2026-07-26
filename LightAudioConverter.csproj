@@ -16,6 +16,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <None Remove="tests\**\*" />
     <EmbeddedResource Include="Engine\ffmpeg.exe" LogicalName="LightAudioConverter.Engine.ffmpeg.exe" />
     <EmbeddedResource Include="THIRD_PARTY_NOTICES.txt" LogicalName="LightAudioConverter.THIRD_PARTY_NOTICES.txt" />
     <Resource Include="Assets\app.ico" />

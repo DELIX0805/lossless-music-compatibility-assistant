@@ -59,6 +59,15 @@ Other inputs use the following pipeline:
 4. Lossless FLAC level 8 encoding.
 5. No loudness normalization, dynamic compression, or EQ.
 
+为提高老式播放器的兼容性，需要转码的文件只保留第一条音频流和文本元数据，
+嵌入式封面等视频流会被移除。已经完全符合目标规格的 FLAC 则原样复制，因此
+其中原有的封面和标签不会被改动。
+
+For legacy-player compatibility, transcoded files retain the first audio stream
+and text metadata, while embedded cover-art/video streams are removed. FLAC
+files that already match the target are copied unchanged, so their existing
+artwork and tags remain intact.
+
 > 将有损音频转换为 FLAC 无法恢复已经丢失的信息。采样率或位深发生变化时，
 > 严格意义上也不是“无损”，本软件的目标是尽量减少可闻损失并提高老设备兼容性。
 >
@@ -101,6 +110,19 @@ dotnet publish -c Release -r win-x64 --self-contained true `
 
 `Engine/ffmpeg.exe` is intentionally excluded from Git. See
 [`Engine/README.md`](Engine/README.md) for details.
+
+## 测试 / Tests
+
+回归测试涵盖真实格式识别、目标规格逐字节复制、重采样输出规格、取消清理和
+并发写入保护。在 PowerShell 中执行：
+
+Regression tests cover real-format detection, byte-identical target copying,
+resampled output specifications, cancellation cleanup, and concurrent-write
+protection. Run:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-tests.ps1
+```
 
 ## 第三方组件与许可证 / Third-Party Components and Licensing
 
