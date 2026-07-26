@@ -30,7 +30,7 @@
                                    VerticalAlignment="Center" Foreground="White"/>
                     </Border>
                     <TextBlock Text="无损音乐兼容助手" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock Text="为仅支持 16-bit FLAC 的老款 MP3 与索尼 NW 系列播放器提供兼容转换"
+                    <TextBlock Text="为索尼 NW 系列与 iPod shuffle 4 提供兼容音频转换"
                                Foreground="{StaticResource Muted}" FontSize="10" Margin="14,1,0,0"
                                VerticalAlignment="Center"/>
                 </StackPanel>
@@ -167,8 +167,13 @@
                             <TextBlock Text="&#xE9D2;" FontFamily="Segoe Fluent Icons" Foreground="{StaticResource Accent}" FontSize="18" Margin="0,0,12,0"/>
                             <TextBlock Text="输出格式" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock Grid.Column="1" Text="FLAC · 16-bit · 44.1 kHz · 双声道"
-                                   Foreground="{StaticResource Accent}" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="PresetComboBox" Grid.Column="1" SelectedIndex="0"
+                                  SelectionChanged="PresetComboBox_SelectionChanged"
+                                  Style="{StaticResource PresetComboBox}">
+                            <ComboBoxItem Content="索尼 NW 系列：FLAC · 16-bit · 44.1 kHz · 双声道"/>
+                            <ComboBoxItem Content="iPod shuffle 4：ALAC · 16-bit · 44.1 kHz · 双声道"/>
+                            <ComboBoxItem Content="iPod shuffle 4：AAC-LC · 320 kbps · 44.1 kHz · 双声道"/>
+                        </ComboBox>
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,1">
                         <Grid Margin="18,0">
@@ -190,7 +195,7 @@
                             <TextBlock Text="算法说明" VerticalAlignment="Center"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <TextBlock Text="SoXR 最高精度重采样 · TPDF 抖动" Foreground="#B4C0C8"/>
+                            <TextBlock x:Name="QualitySummary" Text="SoXR 最高精度重采样 · TPDF 抖动" Foreground="#B4C0C8"/>
                             <TextBlock x:Name="QualityDetail" Text="仅在必要时处理 · 输出 16-bit · 不做音量归一化"
                                        Foreground="{StaticResource Muted}" FontSize="10" Margin="0,3,0,0"/>
                         </StackPanel>

@@ -24,6 +24,8 @@ public partial class MainWindow : Window
 
     public ObservableCollection<AudioFileItem> Files { get; } = [];
     public string OutputFolder { get; private set; } = GetDefaultOutputFolder();
+    private OutputPreset SelectedPreset =>
+        OutputPreset.All[Math.Clamp(PresetComboBox.SelectedIndex, 0, OutputPreset.All.Count - 1)];
 
     public MainWindow()
     {
@@ -96,6 +98,7 @@ public partial class MainWindow : Window
             try
             {
                 var item = await _ffmpeg.ProbeAsync(path, CancellationToken.None);
+                item.Status = SelectedPreset.IsExactMatch(item) ? "无需处理" : "等待转换";
                 Files.Add(item);
             }
             catch (Exception ex)
@@ -105,6 +108,21 @@ public partial class MainWindow : Window
             }
         }
         HintText.Text = "与目标格式一致的文件将跳过不必要的处理";
+    }
+
+    private void PresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsInitialized || QualitySummary is null || QualityDetail is null)
+            return;
+
+        var preset = SelectedPreset;
+        QualitySummary.Text = preset.AlgorithmSummary;
+        QualityDetail.Text = preset.AlgorithmDetail;
+        HintText.Text = preset.Kind == OutputPresetKind.IpodShuffleAac
+            ? "AAC 320 kbps 为高质量有损转换；已兼容的 M4A 文件会直接复制"
+            : "与目标格式一致的文件将跳过不必要的处理";
+        foreach (var item in Files)
+            item.Status = preset.IsExactMatch(item) ? "无需处理" : "等待转换";
     }
 
     private async void AddFiles_Click(object sender, RoutedEventArgs e)
@@ -166,6 +184,7 @@ public partial class MainWindow : Window
     {
         if (_busy || Files.Count == 0) return;
         var outputFolder = OutputFolder;
+        var preset = SelectedPreset;
         try
         {
             Directory.CreateDirectory(outputFolder);
@@ -190,7 +209,7 @@ public partial class MainWindow : Window
             {
                 var item = Files[i];
                 if (_conversionCts.IsCancellationRequested) break;
-                item.Status = item.IsExactTarget ? "无损复制" : "转换中";
+                item.Status = preset.IsExactMatch(item) ? "直接复制" : "转换中";
                 var index = i;
                 var progress = new Progress<double>(value =>
                 {
@@ -201,8 +220,8 @@ public partial class MainWindow : Window
 
                 try
                 {
-                    var destination = UniqueOutputPath(item, outputFolder);
-                    await _ffmpeg!.ConvertAsync(item, destination, progress, _conversionCts.Token);
+                    var destination = UniqueOutputPath(item, outputFolder, preset.Extension);
+                    await _ffmpeg!.ConvertAsync(item, preset, destination, progress, _conversionCts.Token);
                     item.Status = "已完成";
                     completed++;
                 }
@@ -247,14 +266,14 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private static string UniqueOutputPath(AudioFileItem item, string outputFolder)
+    private static string UniqueOutputPath(AudioFileItem item, string outputFolder, string extension)
     {
         var baseName = Path.GetFileNameWithoutExtension(item.FileName);
-        var path = Path.Combine(outputFolder, baseName + ".flac");
+        var path = Path.Combine(outputFolder, baseName + extension);
         if (!File.Exists(path) && !path.Equals(item.FilePath, StringComparison.OrdinalIgnoreCase)) return path;
         for (var i = 2; ; i++)
         {
-            path = Path.Combine(outputFolder, $"{baseName} ({i}).flac");
+            path = Path.Combine(outputFolder, $"{baseName} ({i}){extension}");
             if (!File.Exists(path) && !path.Equals(item.FilePath, StringComparison.OrdinalIgnoreCase)) return path;
         }
     }
@@ -263,6 +282,7 @@ public partial class MainWindow : Window
     {
         ConvertButton.IsEnabled = !busy && Files.Count > 0;
         BrowseOutputButton.IsEnabled = !busy;
+        PresetComboBox.IsEnabled = !busy;
         DropZone.IsEnabled = !busy;
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         OverallProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;

@@ -1,18 +1,21 @@
 # 无损音乐兼容助手 / Lossless Music Compatibility Assistant
 
-一款面向老款 MP3 播放器与部分索尼 NW 系列播放器的 Windows 音频转换工具。
-它将采样率、位深和格式不一致的音频统一转换为兼容性较好的：
+一款面向索尼 NW 系列播放器与 iPod shuffle 4 的 Windows 音频转换工具。
+它提供三个设备兼容预设：
 
 ```text
-FLAC · 16-bit · 44.1 kHz · 双声道
+索尼 NW 系列：FLAC · 16-bit · 44.1 kHz · 双声道
+iPod shuffle 4：ALAC · 16-bit · 44.1 kHz · 双声道
+iPod shuffle 4：AAC-LC · 320 kbps · 44.1 kHz · 双声道
 ```
 
-A Windows audio converter designed for older MP3 players and selected Sony NW
-series devices. It normalizes audio with inconsistent formats, sample rates,
-and bit depths to the broadly compatible target:
+A Windows audio converter designed for Sony NW series players and the
+iPod shuffle 4. It provides three device-compatible output presets:
 
 ```text
-FLAC · 16-bit · 44.1 kHz · Stereo
+Sony NW series: FLAC · 16-bit · 44.1 kHz · stereo
+iPod shuffle 4: ALAC · 16-bit · 44.1 kHz · stereo
+iPod shuffle 4: AAC-LC · 320 kbps · 44.1 kHz · stereo
 ```
 
 ## 功能 / Features
@@ -22,6 +25,7 @@ FLAC · 16-bit · 44.1 kHz · Stereo
 - 默认输出到桌面的“无损音乐兼容助手”文件夹。
 - 显示源文件格式、位深、采样率、声道和转换状态。
 - 支持转换进度与取消操作。
+- 可选择索尼 NW 系列 FLAC、iPod shuffle 4 ALAC 或 AAC 320 kbps。
 - 发布为单文件 Windows x64 EXE，内置 .NET 运行时和 FFmpeg。
 
 ---
@@ -32,13 +36,14 @@ FLAC · 16-bit · 44.1 kHz · Stereo
 - Outputs to the `无损音乐兼容助手` folder on the desktop by default.
 - Shows source format, bit depth, sample rate, channels, and conversion status.
 - Provides conversion progress and cancellation.
+- Selectable Sony NW FLAC, iPod shuffle 4 ALAC, and AAC 320 kbps presets.
 - Publishes as a single Windows x64 EXE with the .NET runtime and FFmpeg
   embedded.
 
 ## 音质策略 / Audio Quality Strategy
 
-完全符合 `FLAC / 16-bit / 44.1 kHz / 双声道` 的文件会被逐字节复制，
-不会重新编码。
+完全符合所选无损预设的文件会被逐字节复制，不会重新编码。已经兼容的 AAC
+M4A 文件也会直接复制，避免重复有损编码。
 
 其他输入采用以下处理链：
 
@@ -48,8 +53,9 @@ FLAC · 16-bit · 44.1 kHz · Stereo
 4. 使用 FLAC level 8 无损编码。
 5. 不进行音量归一化、动态压缩或 EQ。
 
-Files already matching `FLAC / 16-bit / 44.1 kHz / stereo` are copied
-byte-for-byte without re-encoding.
+Files already matching the selected lossless preset are copied byte-for-byte
+without re-encoding. Compatible AAC M4A inputs are also copied to avoid
+generation loss.
 
 Other inputs use the following pipeline:
 
@@ -58,6 +64,13 @@ Other inputs use the following pipeline:
 3. TPDF dithering when quantizing to 16-bit.
 4. Lossless FLAC level 8 encoding.
 5. No loudness normalization, dynamic compression, or EQ.
+
+ALAC 使用相同的 16-bit/44.1 kHz 高精度处理链并进行 Apple Lossless 编码。
+AAC 预设使用 AAC-LC 320 kbps；AAC 是高质量有损格式，不属于无损转换。
+
+ALAC uses the same high-precision 16-bit/44.1 kHz processing chain followed by
+Apple Lossless encoding. The AAC preset uses AAC-LC at 320 kbps; AAC is a
+high-quality lossy format and is not a lossless conversion.
 
 为提高老式播放器的兼容性，需要转码的文件只保留第一条音频流和文本元数据，
 嵌入式封面等视频流会被移除。已经完全符合目标规格的 FLAC 则原样复制，因此

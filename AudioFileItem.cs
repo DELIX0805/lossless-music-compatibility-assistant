@@ -14,12 +14,9 @@ public sealed class AudioFileItem : INotifyPropertyChanged
     public string Format { get; init; } = "未知";
     public int SampleRate { get; init; }
     public int BitDepth { get; init; }
+    public int BitRate { get; init; }
     public int Channels { get; init; }
     public TimeSpan Duration { get; init; }
-    public bool IsExactTarget =>
-        Path.GetExtension(FilePath).Equals(".flac", StringComparison.OrdinalIgnoreCase)
-        && Format.Equals("FLAC", StringComparison.OrdinalIgnoreCase)
-        && SampleRate == 44100 && BitDepth == 16 && Channels == 2;
 
     public string SourceSummary
     {

@@ -132,21 +132,27 @@ public sealed partial class FfmpegService
         }
 
         var channels = ParseChannels(audioLine);
+        var bitRateMatch = BitRateRegex().Match(audioLine);
+        var bitRate = bitRateMatch.Success
+            ? int.Parse(bitRateMatch.Groups[1].Value, CultureInfo.InvariantCulture) * 1000
+            : 0;
         var item = new AudioFileItem
         {
             FilePath = filePath,
             Format = codec,
             SampleRate = sampleRate,
             BitDepth = bitDepth,
+            BitRate = bitRate,
             Channels = channels,
             Duration = duration
         };
-        item.Status = item.IsExactTarget ? "无需处理" : "等待转换";
+        item.Status = "等待转换";
         return item;
     }
 
     public async Task ConvertAsync(
         AudioFileItem item,
+        OutputPreset preset,
         string outputPath,
         IProgress<double> progress,
         CancellationToken cancellationToken)
@@ -155,13 +161,13 @@ public sealed partial class FfmpegService
             ?? throw new InvalidOperationException("输出路径无效。");
         var temporaryPath = Path.Combine(
             outputDirectory,
-            $".{Path.GetFileNameWithoutExtension(outputPath)}.{Guid.NewGuid():N}.tmp.flac");
+            $".{Path.GetFileNameWithoutExtension(outputPath)}.{Guid.NewGuid():N}.tmp{preset.Extension}");
 
         try
         {
-            if (item.IsExactTarget)
+            if (preset.IsExactMatch(item))
             {
-                item.Status = "无损复制";
+                item.Status = "直接复制";
                 await CopyWithProgressAsync(item.FilePath, temporaryPath, progress, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Move(temporaryPath, outputPath, false);
@@ -175,12 +181,12 @@ public sealed partial class FfmpegService
             {
                 "-n", "-hide_banner", "-nostdin",
                 "-i", item.FilePath,
-                "-map", "0:a:0", "-map_metadata", "0", "-vn",
-                "-af", "aresample=44100:resampler=soxr:precision=33:dither_method=triangular:osf=s16",
-                "-ar", "44100", "-ac", "2", "-sample_fmt", "s16",
-                "-c:a", "flac", "-compression_level", "8",
-                "-progress", "pipe:1", "-nostats", temporaryPath
+                "-map", "0:a:0", "-map_metadata", "0", "-vn"
             }) psi.ArgumentList.Add(arg);
+            foreach (var arg in EncodingArguments(preset))
+                psi.ArgumentList.Add(arg);
+            foreach (var arg in new[] { "-progress", "pipe:1", "-nostats", temporaryPath })
+                psi.ArgumentList.Add(arg);
 
             using var process = Process.Start(psi) ?? throw new InvalidOperationException("无法启动音频引擎。");
             using var cancellation = cancellationToken.Register(() =>
@@ -230,6 +236,29 @@ public sealed partial class FfmpegService
         CreateNoWindow = true,
         StandardOutputEncoding = Encoding.UTF8,
         StandardErrorEncoding = Encoding.UTF8
+    };
+
+    private static IEnumerable<string> EncodingArguments(OutputPreset preset) => preset.Kind switch
+    {
+        OutputPresetKind.SonyNwFlac =>
+        [
+            "-af", "aresample=44100:resampler=soxr:precision=33:dither_method=triangular:osf=s16",
+            "-ar", "44100", "-ac", "2", "-sample_fmt", "s16",
+            "-c:a", "flac", "-compression_level", "8"
+        ],
+        OutputPresetKind.IpodShuffleAlac =>
+        [
+            "-af", "aresample=44100:resampler=soxr:precision=33:dither_method=triangular:osf=s16",
+            "-ar", "44100", "-ac", "2", "-sample_fmt", "s16p",
+            "-c:a", "alac"
+        ],
+        OutputPresetKind.IpodShuffleAac =>
+        [
+            "-af", "aresample=44100:resampler=soxr:precision=33",
+            "-ar", "44100", "-ac", "2",
+            "-c:a", "aac", "-profile:a", "aac_low", "-b:a", "320k"
+        ],
+        _ => throw new ArgumentOutOfRangeException(nameof(preset))
     };
 
     private static int ParseChannels(string line)
@@ -293,4 +322,6 @@ public sealed partial class FfmpegService
     private static partial Regex SampleFormatRegex();
     [GeneratedRegex(@"(\d+)\s+channels?", RegexOptions.IgnoreCase)]
     private static partial Regex ChannelCountRegex();
+    [GeneratedRegex(@"(\d+)\s*kb/s", RegexOptions.IgnoreCase)]
+    private static partial Regex BitRateRegex();
 }
