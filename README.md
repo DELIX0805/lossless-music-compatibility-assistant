@@ -141,6 +141,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-tests.ps1
 
 ## 第三方组件与许可证 / Third-Party Components and Licensing
 
+本项目自行编写的源代码采用 [MIT License](LICENSE)。FFmpeg 及其依赖项不受
+本项目 MIT License 覆盖，分别遵循各自的许可证。
+
+Original source code in this repository is licensed under the
+[MIT License](LICENSE). FFmpeg and its dependencies are not covered by this
+project's MIT License and remain subject to their respective licenses.
+
 程序通过独立进程调用 FFmpeg。当前开发构建使用启用了 GPL 组件的 FFmpeg，
 公开或商业分发前必须遵守 FFmpeg 及其依赖项的许可证义务。
 
