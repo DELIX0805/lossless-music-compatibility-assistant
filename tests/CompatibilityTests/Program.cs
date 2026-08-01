@@ -22,12 +22,17 @@ try
         "-sample_fmt", "s16", Path.Combine(testRoot, "exact.flac"));
     await RunFfmpegAsync("-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
         "sine=frequency=997:sample_rate=96000:duration=0.4", "-ac", "2", "-c:a", "flac",
-        "-sample_fmt", "s32", Path.Combine(testRoot, "high-resolution.flac"));
+        "-sample_fmt", "s32", "-metadata", "title=Compatibility Test",
+        Path.Combine(testRoot, "high-resolution.flac"));
+    await RunFfmpegAsync("-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i",
+        "sine=frequency=523:sample_rate=96000:duration=120", "-ac", "2", "-c:a", "flac",
+        "-sample_fmt", "s32", Path.Combine(testRoot, "long-running.flac"));
 
     var service = new FfmpegService();
     var sonyPreset = OutputPreset.All.Single(preset => preset.Kind == OutputPresetKind.SonyNwFlac);
     var alacPreset = OutputPreset.All.Single(preset => preset.Kind == OutputPresetKind.IpodShuffleAlac);
     var aacPreset = OutputPreset.All.Single(preset => preset.Kind == OutputPresetKind.IpodShuffleAac);
+    var mp3Preset = OutputPreset.All.Single(preset => preset.Kind == OutputPresetKind.UniversalMp3);
     var disguised = await service.ProbeAsync(Path.Combine(testRoot, "disguised.flac"), CancellationToken.None);
     Assert(!sonyPreset.IsExactMatch(disguised), "A WAV file renamed to .flac must not bypass conversion.");
 
@@ -52,6 +57,61 @@ try
     await service.ConvertAsync(highResolution, aacPreset, aacOutput, new Progress<double>(), CancellationToken.None);
     var aac = await service.ProbeAsync(aacOutput, CancellationToken.None);
     Assert(aacPreset.IsExactMatch(aac), "Converted output is not an iPod-compatible AAC M4A.");
+    Assert(aac.CodecProfile == "LC", "Converted AAC profile was not detected as AAC-LC.");
+    var heAac = new AudioFileItem
+    {
+        FilePath = Path.Combine(testRoot, "simulated-he-aac.m4a"),
+        Format = "AAC",
+        CodecProfile = "HE-AAC",
+        SampleRate = 44100,
+        Channels = 2,
+        BitRate = 128000
+    };
+    Assert(!aacPreset.IsExactMatch(heAac), "HE-AAC must not bypass the AAC-LC conversion preset.");
+
+    var mp3Output = Path.Combine(testRoot, "converted-mp3.mp3");
+    await service.ConvertAsync(highResolution, mp3Preset, mp3Output, new Progress<double>(), CancellationToken.None);
+    var mp3 = await service.ProbeAsync(mp3Output, CancellationToken.None);
+    Assert(mp3Preset.IsExactMatch(mp3), "Converted output is not a compatible MP3/44.1 kHz/stereo file.");
+    Assert(mp3.BitRate is >= 300000 and <= 320000,
+        $"Converted MP3 bitrate ({mp3.BitRate} bps) is not close to the requested 320 kbps CBR.");
+    Assert(HasId3v23AndId3v1(mp3Output), "Converted MP3 is missing ID3v2.3 or ID3v1 compatibility tags.");
+
+    var mp3CopyOutput = Path.Combine(testRoot, "copied-mp3.mp3");
+    await service.ConvertAsync(mp3, mp3Preset, mp3CopyOutput, new Progress<double>(), CancellationToken.None);
+    Assert(Hash(mp3Output) == Hash(mp3CopyOutput), "Compatible MP3 input was re-encoded instead of copied.");
+
+    var parallelOutputs = Enumerable.Range(1, 4)
+        .Select(number => Path.Combine(testRoot, $"parallel-{number}.mp3"))
+        .ToArray();
+    await Task.WhenAll(parallelOutputs.Select(path =>
+        service.ConvertAsync(highResolution, mp3Preset, path, new Progress<double>(), CancellationToken.None)));
+    foreach (var path in parallelOutputs)
+    {
+        var parallelMp3 = await service.ProbeAsync(path, CancellationToken.None);
+        Assert(mp3Preset.IsExactMatch(parallelMp3), "A parallel MP3 conversion produced an incompatible file.");
+    }
+    Assert(!Directory.EnumerateFiles(testRoot, "*.tmp.*").Any(), "Parallel conversion left a temporary file.");
+
+    var firstSourceFolder = Path.Combine(testRoot, "source-a");
+    var secondSourceFolder = Path.Combine(testRoot, "source-b");
+    var plannedOutputFolder = Path.Combine(testRoot, "planned-output");
+    Directory.CreateDirectory(firstSourceFolder);
+    Directory.CreateDirectory(secondSourceFolder);
+    Directory.CreateDirectory(plannedOutputFolder);
+    var firstSameName = Path.Combine(firstSourceFolder, "same-name.flac");
+    var secondSameName = Path.Combine(secondSourceFolder, "same-name.wav");
+    File.WriteAllBytes(firstSameName, [1]);
+    File.WriteAllBytes(secondSameName, [2]);
+    File.WriteAllBytes(Path.Combine(plannedOutputFolder, "same-name.mp3"), [3]);
+    Directory.CreateDirectory(Path.Combine(plannedOutputFolder, "same-name (2).mp3"));
+    var plannedPaths = OutputPathPlanner.Create(
+        [new AudioFileItem { FilePath = firstSameName }, new AudioFileItem { FilePath = secondSameName }],
+        plannedOutputFolder,
+        ".mp3");
+    Assert(Path.GetFileName(plannedPaths[0]) == "same-name (3).mp3"
+           && Path.GetFileName(plannedPaths[1]) == "same-name (4).mp3",
+        "Parallel output planning did not reserve unique names before conversion.");
 
     var cancelledOutput = Path.Combine(testRoot, "cancelled.flac");
     using (var cancellation = new CancellationTokenSource())
@@ -63,6 +123,23 @@ try
     }
     Assert(!File.Exists(cancelledOutput), "Cancellation left a final output file.");
     Assert(!Directory.EnumerateFiles(testRoot, "*.tmp.*").Any(), "Cancellation left a temporary output file.");
+
+    var longRunning = await service.ProbeAsync(Path.Combine(testRoot, "long-running.flac"), CancellationToken.None);
+    var activeCancelledOutput = Path.Combine(testRoot, "active-cancelled.mp3");
+    using (var activeCancellation = new CancellationTokenSource())
+    {
+        var cancelAfterProgress = new CallbackProgress<double>(value =>
+        {
+            if (value > 0) activeCancellation.Cancel();
+        });
+        await AssertThrowsAsync<OperationCanceledException>(
+            () => service.ConvertAsync(longRunning, mp3Preset, activeCancelledOutput,
+                cancelAfterProgress, activeCancellation.Token),
+            "An active FFmpeg conversion did not report cancellation.");
+    }
+    Assert(!File.Exists(activeCancelledOutput), "Active cancellation left a final output file.");
+    Assert(!Directory.EnumerateFiles(testRoot, "*.tmp.*").Any(),
+        "Active cancellation left a temporary output file or a running pipe task.");
 
     var concurrentOutput = Path.Combine(testRoot, "concurrent.flac");
     var conversions = new[]
@@ -110,6 +187,22 @@ static string Hash(string path)
     return Convert.ToHexString(SHA256.HashData(stream));
 }
 
+static bool HasId3v23AndId3v1(string path)
+{
+    using var stream = File.OpenRead(path);
+    if (stream.Length < 132) return false;
+
+    Span<byte> header = stackalloc byte[4];
+    stream.ReadExactly(header);
+    if (header[0] != (byte)'I' || header[1] != (byte)'D' || header[2] != (byte)'3' || header[3] != 3)
+        return false;
+
+    stream.Seek(-128, SeekOrigin.End);
+    Span<byte> footer = stackalloc byte[3];
+    stream.ReadExactly(footer);
+    return footer[0] == (byte)'T' && footer[1] == (byte)'A' && footer[2] == (byte)'G';
+}
+
 static void Assert(bool condition, string message)
 {
     if (!condition)
@@ -141,4 +234,9 @@ static async Task<Exception?> CaptureAsync(Func<Task> action)
     {
         return ex;
     }
+}
+
+sealed class CallbackProgress<T>(Action<T> callback) : IProgress<T>
+{
+    public void Report(T value) => callback(value);
 }

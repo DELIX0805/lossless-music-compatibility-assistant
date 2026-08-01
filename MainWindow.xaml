@@ -30,7 +30,7 @@
                                    VerticalAlignment="Center" Foreground="White"/>
                     </Border>
                     <TextBlock Text="无损音乐兼容助手" FontWeight="SemiBold" FontSize="16" VerticalAlignment="Center"/>
-                    <TextBlock Text="为索尼 NW 系列与 iPod shuffle 4 提供兼容音频转换"
+                    <TextBlock Text="为索尼 NW、iPod 与其他播放器提供兼容音频转换"
                                Foreground="{StaticResource Muted}" FontSize="10" Margin="14,1,0,0"
                                VerticalAlignment="Center"/>
                 </StackPanel>
@@ -173,6 +173,7 @@
                             <ComboBoxItem Content="索尼 NW 系列：FLAC · 16-bit · 44.1 kHz · 双声道"/>
                             <ComboBoxItem Content="iPod shuffle 4：ALAC · 16-bit · 44.1 kHz · 双声道"/>
                             <ComboBoxItem Content="iPod shuffle 4：AAC-LC · 320 kbps · 44.1 kHz · 双声道"/>
+                            <ComboBoxItem Content="通用播放器：MP3 · 320 kbps CBR · 44.1 kHz · 双声道"/>
                         </ComboBox>
                     </Grid>
                     <Border Grid.Row="1" BorderBrush="{StaticResource Border}" BorderThickness="0,1,0,1">
@@ -189,7 +190,11 @@
                         </Grid>
                     </Border>
                     <Grid Grid.Row="2" Margin="18,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="170"/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="170"/>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons" Foreground="{StaticResource Accent}" FontSize="18" Margin="0,0,12,0"/>
                             <TextBlock Text="算法说明" VerticalAlignment="Center"/>
@@ -198,6 +203,18 @@
                             <TextBlock x:Name="QualitySummary" Text="SoXR 最高精度重采样 · TPDF 抖动" Foreground="#B4C0C8"/>
                             <TextBlock x:Name="QualityDetail" Text="仅在必要时处理 · 输出 16-bit · 不做音量归一化"
                                        Foreground="{StaticResource Muted}" FontSize="10" Margin="0,3,0,0"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                            <TextBlock Text="并行任务" Foreground="{StaticResource Muted}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox x:Name="ConcurrencyComboBox" SelectedIndex="0" Width="82"
+                                      Style="{StaticResource PresetComboBox}"
+                                      ToolTip="自动模式根据 CPU 核心数选择，最多同时转换 4 个文件">
+                                <ComboBoxItem Content="自动"/>
+                                <ComboBoxItem Content="1"/>
+                                <ComboBoxItem Content="2"/>
+                                <ComboBoxItem Content="4"/>
+                            </ComboBox>
                         </StackPanel>
                     </Grid>
                 </Grid>

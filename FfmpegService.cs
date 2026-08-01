@@ -100,12 +100,19 @@ public sealed partial class FfmpegService
         psi.ArgumentList.Add(filePath);
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("无法启动音频引擎。");
-        using var cancellation = cancellationToken.Register(() =>
+        using var cancellation = cancellationToken.Register(() => TryKillProcess(process));
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        try
         {
-            try { if (!process.HasExited) process.Kill(true); } catch { }
-        });
-        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch
+        {
+            TryKillProcess(process);
+            try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+            try { await stderrTask; } catch { }
+            throw;
+        }
         var text = await stderrTask;
 
         var duration = TimeSpan.Zero;
@@ -118,6 +125,8 @@ public sealed partial class FfmpegService
 
         var codecMatch = CodecRegex().Match(audioLine);
         var codec = codecMatch.Success ? codecMatch.Groups[1].Value.ToUpperInvariant() : Path.GetExtension(filePath).Trim('.').ToUpperInvariant();
+        var profileMatch = CodecProfileRegex().Match(audioLine);
+        var codecProfile = profileMatch.Success ? profileMatch.Groups[1].Value.Trim().ToUpperInvariant() : string.Empty;
 
         var rateMatch = SampleRateRegex().Match(audioLine);
         var sampleRate = rateMatch.Success ? int.Parse(rateMatch.Groups[1].Value, CultureInfo.InvariantCulture) : 0;
@@ -140,6 +149,7 @@ public sealed partial class FfmpegService
         {
             FilePath = filePath,
             Format = codec,
+            CodecProfile = codecProfile,
             SampleRate = sampleRate,
             BitDepth = bitDepth,
             BitRate = bitRate,
@@ -189,32 +199,34 @@ public sealed partial class FfmpegService
                 psi.ArgumentList.Add(arg);
 
             using var process = Process.Start(psi) ?? throw new InvalidOperationException("无法启动音频引擎。");
-            using var cancellation = cancellationToken.Register(() =>
+            using var cancellation = cancellationToken.Register(() => TryKillProcess(process));
+            var errorTask = process.StandardError.ReadToEndAsync();
+            try
             {
-                try { if (!process.HasExited) process.Kill(true); } catch { }
-            });
-            var errors = new StringBuilder();
-            var errorTask = Task.Run(async () =>
-            {
-                while (await process.StandardError.ReadLineAsync(cancellationToken) is { } line)
-                    errors.AppendLine(line);
-            }, cancellationToken);
-
-            while (await process.StandardOutput.ReadLineAsync(cancellationToken) is { } line)
-            {
-                if (line.StartsWith("out_time_us=", StringComparison.Ordinal)
-                    && long.TryParse(line.AsSpan(12), out var microseconds)
-                    && item.Duration.TotalMilliseconds > 0)
+                while (await process.StandardOutput.ReadLineAsync(cancellationToken) is { } line)
                 {
-                    var value = microseconds / 1000d / item.Duration.TotalMilliseconds * 100d;
-                    progress.Report(Math.Clamp(value, 0, 99.5));
+                    if (line.StartsWith("out_time_us=", StringComparison.Ordinal)
+                        && long.TryParse(line.AsSpan(12), out var microseconds)
+                        && item.Duration.TotalMilliseconds > 0)
+                    {
+                        var value = microseconds / 1000d / item.Duration.TotalMilliseconds * 100d;
+                        progress.Report(Math.Clamp(value, 0, 99.5));
+                    }
                 }
+
+                await process.WaitForExitAsync(cancellationToken);
+            }
+            catch
+            {
+                TryKillProcess(process);
+                try { await process.WaitForExitAsync(CancellationToken.None); } catch { }
+                try { await errorTask; } catch { }
+                throw;
             }
 
-            await process.WaitForExitAsync(cancellationToken);
-            await errorTask;
+            var errors = await errorTask;
             if (process.ExitCode != 0)
-                throw new InvalidOperationException(LastLines(errors.ToString(), 8));
+                throw new InvalidOperationException(LastLines(errors, 8));
 
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporaryPath, outputPath, false);
@@ -257,6 +269,14 @@ public sealed partial class FfmpegService
             "-af", "aresample=44100:resampler=soxr:precision=33",
             "-ar", "44100", "-ac", "2",
             "-c:a", "aac", "-profile:a", "aac_low", "-b:a", "320k"
+        ],
+        OutputPresetKind.UniversalMp3 =>
+        [
+            "-af", "aresample=44100:resampler=soxr:precision=33",
+            "-ar", "44100", "-ac", "2",
+            "-c:a", "libmp3lame", "-b:a", "320k",
+            "-reservoir", "1", "-joint_stereo", "1",
+            "-id3v2_version", "3", "-write_id3v1", "1"
         ],
         _ => throw new ArgumentOutOfRangeException(nameof(preset))
     };
@@ -308,10 +328,17 @@ public sealed partial class FfmpegService
         try { if (File.Exists(path)) File.Delete(path); } catch { }
     }
 
+    private static void TryKillProcess(Process process)
+    {
+        try { if (!process.HasExited) process.Kill(true); } catch { }
+    }
+
     [GeneratedRegex(@"Duration:\s*(\d{2}:\d{2}:\d{2}(?:\.\d+)?)")]
     private static partial Regex DurationRegex();
     [GeneratedRegex(@"Audio:\s*([^,\s]+)", RegexOptions.IgnoreCase)]
     private static partial Regex CodecRegex();
+    [GeneratedRegex(@"Audio:\s*[^,\s]+\s*\(([^)]+)\)", RegexOptions.IgnoreCase)]
+    private static partial Regex CodecProfileRegex();
     [GeneratedRegex(@"(\d+)\s*Hz", RegexOptions.IgnoreCase)]
     private static partial Regex SampleRateRegex();
     [GeneratedRegex(@"\((\d+)\s*bit\)", RegexOptions.IgnoreCase)]

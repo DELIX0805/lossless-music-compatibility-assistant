@@ -40,21 +40,23 @@ legacy hardware.
 ![无损音乐兼容助手主界面](docs/screenshots/main-window.png)
 
 一款面向索尼 NW 系列播放器与 iPod shuffle 4 的 Windows 音频转换工具。
-它提供三个设备兼容预设：
+它提供四个设备兼容预设：
 
 ```text
 索尼 NW 系列：FLAC · 16-bit · 44.1 kHz · 双声道
 iPod shuffle 4：ALAC · 16-bit · 44.1 kHz · 双声道
 iPod shuffle 4：AAC-LC · 320 kbps · 44.1 kHz · 双声道
+通用播放器：MP3 · 320 kbps CBR · 44.1 kHz · 双声道
 ```
 
 A Windows audio converter designed for Sony NW series players and the
-iPod shuffle 4. It provides three device-compatible output presets:
+iPod shuffle 4. It provides four device-compatible output presets:
 
 ```text
 Sony NW series: FLAC · 16-bit · 44.1 kHz · stereo
 iPod shuffle 4: ALAC · 16-bit · 44.1 kHz · stereo
 iPod shuffle 4: AAC-LC · 320 kbps · 44.1 kHz · stereo
+Universal players: MP3 · 320 kbps CBR · 44.1 kHz · stereo
 ```
 
 ## 功能 / Features
@@ -64,7 +66,8 @@ iPod shuffle 4: AAC-LC · 320 kbps · 44.1 kHz · stereo
 - 默认输出到桌面的“无损音乐兼容助手”文件夹。
 - 显示源文件格式、位深、采样率、声道和转换状态。
 - 支持转换进度与取消操作。
-- 可选择索尼 NW 系列 FLAC、iPod shuffle 4 ALAC 或 AAC 320 kbps。
+- 支持自动、1、2 或 4 个并行转换任务；自动模式根据 CPU 核心数选择，上限为 4。
+- 可选择索尼 NW 系列 FLAC、iPod shuffle 4 ALAC/AAC 或通用 MP3 320 kbps。
 - 发布为单文件 Windows x64 EXE，内置 .NET 运行时和 FFmpeg。
 
 ---
@@ -75,14 +78,17 @@ iPod shuffle 4: AAC-LC · 320 kbps · 44.1 kHz · stereo
 - Outputs to the `无损音乐兼容助手` folder on the desktop by default.
 - Shows source format, bit depth, sample rate, channels, and conversion status.
 - Provides conversion progress and cancellation.
-- Selectable Sony NW FLAC, iPod shuffle 4 ALAC, and AAC 320 kbps presets.
+- Supports automatic, 1, 2, or 4 concurrent conversions; automatic mode is
+  CPU-aware and capped at four jobs.
+- Selectable Sony NW FLAC, iPod shuffle 4 ALAC/AAC, and universal MP3
+  320 kbps presets.
 - Publishes as a single Windows x64 EXE with the .NET runtime and FFmpeg
   embedded.
 
 ## 音质策略 / Audio Quality Strategy
 
 完全符合所选无损预设的文件会被逐字节复制，不会重新编码。已经兼容的 AAC
-M4A 文件也会直接复制，避免重复有损编码。
+M4A 和 MP3 文件也会直接复制，避免重复有损编码。
 
 其他输入采用以下处理链：
 
@@ -93,8 +99,8 @@ M4A 文件也会直接复制，避免重复有损编码。
 5. 不进行音量归一化、动态压缩或 EQ。
 
 Files already matching the selected lossless preset are copied byte-for-byte
-without re-encoding. Compatible AAC M4A inputs are also copied to avoid
-generation loss.
+without re-encoding. Compatible AAC M4A and MP3 inputs are also copied to
+avoid generation loss.
 
 Other inputs use the following pipeline:
 
@@ -106,10 +112,16 @@ Other inputs use the following pipeline:
 
 ALAC 使用相同的 16-bit/44.1 kHz 高精度处理链并进行 Apple Lossless 编码。
 AAC 预设使用 AAC-LC 320 kbps；AAC 是高质量有损格式，不属于无损转换。
+通用 MP3 预设使用 libmp3lame、320 kbps CBR、Joint Stereo 和 Bit Reservoir，
+并写入兼容性较好的 ID3v2.3/ID3v1 标签。MP3 同样属于有损格式；把低码率 MP3
+重新编码为 320 kbps 不会恢复已经丢失的信息。
 
 ALAC uses the same high-precision 16-bit/44.1 kHz processing chain followed by
 Apple Lossless encoding. The AAC preset uses AAC-LC at 320 kbps; AAC is a
 high-quality lossy format and is not a lossless conversion.
+The universal MP3 preset uses libmp3lame, 320 kbps CBR, Joint Stereo, the bit
+reservoir, and legacy-friendly ID3v2.3/ID3v1 tags. MP3 is also lossy; re-encoding
+a low-bitrate MP3 at 320 kbps cannot restore discarded information.
 
 为提高老式播放器的兼容性，需要转码的文件只保留第一条音频流和文本元数据，
 嵌入式封面等视频流会被移除。已经完全符合目标规格的 FLAC 则原样复制，因此
@@ -134,13 +146,13 @@ artwork and tags remain intact.
 
 - Windows 10/11 x64
 - .NET 10 SDK
-- 支持 `libsoxr` 的 Windows x64 `ffmpeg.exe`
+- 支持 `libsoxr` 和 `libmp3lame` 的 Windows x64 `ffmpeg.exe`
 
 Requirements:
 
 - Windows 10/11 x64
 - .NET 10 SDK
-- Windows x64 `ffmpeg.exe` built with `libsoxr`
+- Windows x64 `ffmpeg.exe` built with `libsoxr` and `libmp3lame`
 
 将 FFmpeg 放到：
 

@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -21,11 +22,19 @@ public partial class MainWindow : Window
     private CancellationTokenSource? _conversionCts;
     private bool _busy;
     private bool _isClosing;
+    private long _conversionBatchId;
 
     public ObservableCollection<AudioFileItem> Files { get; } = [];
     public string OutputFolder { get; private set; } = GetDefaultOutputFolder();
     private OutputPreset SelectedPreset =>
         OutputPreset.All[Math.Clamp(PresetComboBox.SelectedIndex, 0, OutputPreset.All.Count - 1)];
+    private int SelectedParallelism => ConcurrencyComboBox.SelectedIndex switch
+    {
+        1 => 1,
+        2 => 2,
+        3 => 4,
+        _ => Math.Clamp(Environment.ProcessorCount / 4, 1, 4)
+    };
 
     public MainWindow()
     {
@@ -118,9 +127,14 @@ public partial class MainWindow : Window
         var preset = SelectedPreset;
         QualitySummary.Text = preset.AlgorithmSummary;
         QualityDetail.Text = preset.AlgorithmDetail;
-        HintText.Text = preset.Kind == OutputPresetKind.IpodShuffleAac
-            ? "AAC 320 kbps 为高质量有损转换；已兼容的 M4A 文件会直接复制"
-            : "与目标格式一致的文件将跳过不必要的处理";
+        HintText.Text = preset.Kind switch
+        {
+            OutputPresetKind.IpodShuffleAac =>
+                "AAC 320 kbps 为高质量有损转换；已兼容的 M4A 文件会直接复制",
+            OutputPresetKind.UniversalMp3 =>
+                "MP3 320 kbps 为高质量有损转换；已兼容的 MP3 会直接复制，避免二次损失",
+            _ => "与目标格式一致的文件将跳过不必要的处理"
+        };
         foreach (var item in Files)
             item.Status = preset.IsExactMatch(item) ? "无需处理" : "等待转换";
     }
@@ -185,11 +199,15 @@ public partial class MainWindow : Window
         if (_busy || Files.Count == 0) return;
         var outputFolder = OutputFolder;
         var preset = SelectedPreset;
+        var parallelism = SelectedParallelism;
+        List<ConversionJob> jobs;
         try
         {
             Directory.CreateDirectory(outputFolder);
+            jobs = CreateConversionJobs(Files.ToList(), outputFolder, preset.Extension);
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException
+                                   or System.Security.SecurityException or ArgumentException or NotSupportedException)
         {
             System.Windows.MessageBox.Show($"{outputFolder}\n{ex.Message}", "无法创建输出文件夹",
                 MessageBoxButton.OK, MessageBoxImage.Error);
@@ -197,48 +215,30 @@ public partial class MainWindow : Window
         }
 
         _busy = true;
+        var batchId = ++_conversionBatchId;
         _conversionCts = new CancellationTokenSource();
         SetBusyUi(true);
 
+        var progressValues = new double[jobs.Count];
+        using var limiter = new SemaphoreSlim(parallelism, parallelism);
+        var errors = new ConcurrentQueue<string>();
         var completed = 0;
         var failed = 0;
         var wasCancelled = false;
         try
         {
-            for (var i = 0; i < Files.Count; i++)
+            foreach (var job in jobs)
             {
-                var item = Files[i];
-                if (_conversionCts.IsCancellationRequested) break;
-                item.Status = preset.IsExactMatch(item) ? "直接复制" : "转换中";
-                var index = i;
-                var progress = new Progress<double>(value =>
-                {
-                    item.Progress = value;
-                    OverallProgress.Value = (index + value / 100d) / Files.Count * 100d;
-                    HintText.Text = $"{item.Status}：{item.FileName}  {value:0}%";
-                });
-
-                try
-                {
-                    var destination = UniqueOutputPath(item, outputFolder, preset.Extension);
-                    await _ffmpeg!.ConvertAsync(item, preset, destination, progress, _conversionCts.Token);
-                    item.Status = "已完成";
-                    completed++;
-                }
-                catch (OperationCanceledException)
-                {
-                    item.Status = "已取消";
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    item.Status = "失败";
-                    failed++;
-                    System.Windows.MessageBox.Show($"{item.FileName}\n{ex.Message}", "转换失败",
-                        MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                job.Item.Status = "排队中";
+                job.Item.Progress = 0;
             }
 
+            var tasks = jobs.Select((job, index) => ConvertJobAsync(
+                job, index, jobs.Count, preset, parallelism, limiter,
+                progressValues, errors, batchId, _conversionCts.Token,
+                () => Interlocked.Increment(ref completed),
+                () => Interlocked.Increment(ref failed)));
+            await Task.WhenAll(tasks);
             wasCancelled = _conversionCts.IsCancellationRequested;
         }
         finally
@@ -261,21 +261,86 @@ public partial class MainWindow : Window
             ? $"已取消，完成 {completed} 个文件"
             : $"转换完成：成功 {completed} 个，失败 {failed} 个";
 
-        if (completed > 0 && !wasCancelled && IsVisible)
+        if (!wasCancelled && failed > 0 && IsVisible)
+        {
+            var details = string.Join(Environment.NewLine + Environment.NewLine, errors.Take(8));
+            if (failed > 8)
+                details += $"{Environment.NewLine}{Environment.NewLine}另有 {failed - 8} 个失败任务。";
+            System.Windows.MessageBox.Show(details, $"{failed} 个文件转换失败",
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+
+        if (completed > 0 && failed == 0 && !wasCancelled && IsVisible)
             System.Windows.MessageBox.Show($"已完成 {completed} 个文件。\n\n{outputFolder}", "转换完成",
                 MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
-    private static string UniqueOutputPath(AudioFileItem item, string outputFolder, string extension)
+    private async Task ConvertJobAsync(
+        ConversionJob job,
+        int index,
+        int totalCount,
+        OutputPreset preset,
+        int parallelism,
+        SemaphoreSlim limiter,
+        double[] progressValues,
+        ConcurrentQueue<string> errors,
+        long batchId,
+        CancellationToken cancellationToken,
+        Action markCompleted,
+        Action markFailed)
     {
-        var baseName = Path.GetFileNameWithoutExtension(item.FileName);
-        var path = Path.Combine(outputFolder, baseName + extension);
-        if (!File.Exists(path) && !path.Equals(item.FilePath, StringComparison.OrdinalIgnoreCase)) return path;
-        for (var i = 2; ; i++)
+        var lockTaken = false;
+        try
         {
-            path = Path.Combine(outputFolder, $"{baseName} ({i}){extension}");
-            if (!File.Exists(path) && !path.Equals(item.FilePath, StringComparison.OrdinalIgnoreCase)) return path;
+            await limiter.WaitAsync(cancellationToken);
+            lockTaken = true;
+            cancellationToken.ThrowIfCancellationRequested();
+            job.Item.Status = preset.IsExactMatch(job.Item) ? "直接复制" : "转换中";
+            var progress = new Progress<double>(value =>
+            {
+                if (!_busy || batchId != _conversionBatchId)
+                    return;
+                job.Item.Progress = value;
+                progressValues[index] = value;
+                OverallProgress.Value = progressValues.Sum() / totalCount;
+                if (job.Item.Status is "转换中" or "直接复制")
+                    HintText.Text = $"并行处理中（最多 {parallelism} 个）：{job.Item.FileName}  {value:0}%";
+            });
+
+            await _ffmpeg!.ConvertAsync(job.Item, preset, job.Destination, progress, cancellationToken);
+            job.Item.Progress = 100;
+            progressValues[index] = 100;
+            OverallProgress.Value = progressValues.Sum() / totalCount;
+            job.Item.Status = "已完成";
+            markCompleted();
         }
+        catch (OperationCanceledException)
+        {
+            job.Item.Status = "已取消";
+        }
+        catch (Exception ex)
+        {
+            job.Item.Status = "失败";
+            errors.Enqueue($"{job.Item.FileName}\n{ex.Message}");
+            markFailed();
+        }
+        finally
+        {
+            if (lockTaken)
+                limiter.Release();
+        }
+    }
+
+    private static List<ConversionJob> CreateConversionJobs(
+        IReadOnlyList<AudioFileItem> files,
+        string outputFolder,
+        string extension)
+    {
+        var destinations = OutputPathPlanner.Create(files, outputFolder, extension);
+        var jobs = new List<ConversionJob>(files.Count);
+        for (var index = 0; index < files.Count; index++)
+            jobs.Add(new ConversionJob(files[index], destinations[index]));
+        return jobs;
     }
 
     private void SetBusyUi(bool busy)
@@ -283,10 +348,11 @@ public partial class MainWindow : Window
         ConvertButton.IsEnabled = !busy && Files.Count > 0;
         BrowseOutputButton.IsEnabled = !busy;
         PresetComboBox.IsEnabled = !busy;
+        ConcurrencyComboBox.IsEnabled = !busy;
         DropZone.IsEnabled = !busy;
         CancelButton.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
         OverallProgress.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
-        if (!busy) OverallProgress.Value = 0;
+        OverallProgress.Value = 0;
         UpdateEmptyState();
     }
 
@@ -333,4 +399,6 @@ public partial class MainWindow : Window
             desktop = AppContext.BaseDirectory;
         return Path.Combine(desktop, "无损音乐兼容助手");
     }
+
+    private sealed record ConversionJob(AudioFileItem Item, string Destination);
 }

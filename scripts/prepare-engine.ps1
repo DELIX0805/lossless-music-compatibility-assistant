@@ -16,7 +16,9 @@ function Test-CompatibleFfmpeg {
 
     try {
         $versionOutput = & $Path -version 2>&1 | Out-String
-        return $LASTEXITCODE -eq 0 -and $versionOutput -match '--enable-libsoxr'
+        return $LASTEXITCODE -eq 0 `
+            -and $versionOutput -match '--enable-libsoxr' `
+            -and $versionOutput -match '--enable-libmp3lame'
     }
     catch {
         return $false
@@ -64,4 +66,4 @@ finally {
     Remove-Item -LiteralPath $temporaryDestination -Force -ErrorAction SilentlyContinue
 }
 
-throw 'Could not find a relocatable Windows FFmpeg executable with libsoxr support.'
+throw 'Could not find a relocatable Windows FFmpeg executable with libsoxr and libmp3lame support.'

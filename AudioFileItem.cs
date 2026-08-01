@@ -12,6 +12,7 @@ public sealed class AudioFileItem : INotifyPropertyChanged
     public required string FilePath { get; init; }
     public string FileName => Path.GetFileName(FilePath);
     public string Format { get; init; } = "未知";
+    public string CodecProfile { get; init; } = string.Empty;
     public int SampleRate { get; init; }
     public int BitDepth { get; init; }
     public int BitRate { get; init; }
@@ -25,7 +26,8 @@ public sealed class AudioFileItem : INotifyPropertyChanged
             var bits = BitDepth > 0 ? $"{BitDepth}-bit" : "未知位深";
             var rate = SampleRate > 0 ? $"{SampleRate / 1000d:0.#} kHz" : "未知采样率";
             var channels = Channels switch { 1 => "单声道", 2 => "双声道", > 2 => $"{Channels} 声道", _ => "未知声道" };
-            return $"{Format} · {bits} · {rate} · {channels}";
+            var format = string.IsNullOrWhiteSpace(CodecProfile) ? Format : $"{Format} ({CodecProfile})";
+            return $"{format} · {bits} · {rate} · {channels}";
         }
     }
 

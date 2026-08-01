@@ -8,7 +8,7 @@ Bundled development build:
   FFmpeg N-124279-g0f6ba39122-20260430
   Git revision: 0f6ba39122
   Target: Windows x64
-  Configuration: GPL v3-or-later components enabled; libsoxr enabled
+  Configuration: GPL v3-or-later components enabled; libsoxr and libmp3lame enabled
 
 Project: https://ffmpeg.org/
 Source repository: https://git.ffmpeg.org/ffmpeg.git

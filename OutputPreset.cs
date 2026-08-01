@@ -6,7 +6,8 @@ public enum OutputPresetKind
 {
     SonyNwFlac,
     IpodShuffleAlac,
-    IpodShuffleAac
+    IpodShuffleAac,
+    UniversalMp3
 }
 
 public sealed record OutputPreset(
@@ -39,7 +40,14 @@ public sealed record OutputPreset(
             "AAC-LC · 320 kbps · 44.1 kHz · 双声道",
             ".m4a",
             "SoXR 最高精度重采样 · AAC-LC 320 kbps",
-            "高质量有损编码 · 不做音量归一化")
+            "高质量有损编码 · 不做音量归一化"),
+        new(
+            OutputPresetKind.UniversalMp3,
+            "通用播放器",
+            "MP3 · 320 kbps CBR · 44.1 kHz · 双声道",
+            ".mp3",
+            "SoXR 最高精度重采样 · LAME MP3 320 kbps",
+            "CBR · Joint Stereo · 不做音量归一化")
     ];
 
     public bool IsExactMatch(AudioFileItem item) => Kind switch
@@ -54,9 +62,15 @@ public sealed record OutputPreset(
             && Path.GetExtension(item.FilePath).Equals(".m4a", StringComparison.OrdinalIgnoreCase),
         OutputPresetKind.IpodShuffleAac =>
             item.Format.Equals("AAC", StringComparison.OrdinalIgnoreCase)
+            && item.CodecProfile.Equals("LC", StringComparison.OrdinalIgnoreCase)
             && item.SampleRate == 44100 && item.Channels == 2
             && item.BitRate is >= 8000 and <= 320000
             && Path.GetExtension(item.FilePath).Equals(".m4a", StringComparison.OrdinalIgnoreCase),
+        OutputPresetKind.UniversalMp3 =>
+            item.Format.Equals("MP3", StringComparison.OrdinalIgnoreCase)
+            && item.SampleRate == 44100 && item.Channels == 2
+            && item.BitRate is >= 8000 and <= 320000
+            && Path.GetExtension(item.FilePath).Equals(".mp3", StringComparison.OrdinalIgnoreCase),
         _ => false
     };
 }
